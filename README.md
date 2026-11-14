@@ -1,0 +1,120 @@
+# LocalInformation.jl
+
+Local (per-sample, pointwise) information measures, as a companion to
+[Associations.jl](https://github.com/kahaaga/Associations.jl).
+
+Associations.jl estimates a measure such as the mutual information or the O-information as
+one number. Most of these estimates are sample means of a per-sample quantity, e.g. the
+local mutual information `i(x_t; y_t) = log p(x_t, y_t) / (p(x_t) p(y_t))`. LocalInformation.jl
+returns those per-sample values, for the same estimator objects:
+
+```julia
+using Associations, LocalInformation, Statistics
+
+x = randn(10_000); y = x .+ randn(10_000); z = y .+ randn(10_000)
+
+est = GaussianDecomposition(OInformation())
+ω = local_association(est, x, y, z)       # Vector, one value per sample, in bits
+mean(ω) ≈ association(est, x, y, z)        # true
+```
+
+## The invariant
+
+For every supported estimator `est`,
+
+```julia
+mean(local_association(est, x...)) ≈ association(est, x...)
+mean(local_entropy(est, x)) ≈ information(est, x)            # differential
+mean(local_entropy(est, o, x)) ≈ information(est, o, x)      # discrete
+```
+
+to floating-point rounding (and to `Float32` rounding on a GPU). The test suite checks this
+for every method, in bases 2 and ℯ, with vector and multi-column `StateSpaceSet` inputs.
+Values are in the unit `est.definition.base` (bits by default).
+
+## Supported estimators
+
+| Estimator (Associations / ComplexityMeasures) | Measures | CPU | GPU |
+|:--|:--|:-:|:-:|
+| `JointProbabilities(def, CodifyVariables(o))` (plug-in) | `MIShannon`, `CMIShannon`, higher-order | yes | computed on the CPU |
+| `EntropyDecomposition(def, PlugIn(Shannon()), CodifyVariables(o))` | `MIShannon`, `CMIShannon`, higher-order | yes | computed on the CPU |
+| `EntropyDecomposition(def, Kraskov(; k, w))` | `MIShannon`, `CMIShannon`, higher-order | yes | not yet |
+| `EntropyDecomposition(def, KozachenkoLeonenko(; w))` | `MIShannon`, `CMIShannon`, higher-order | yes | not yet |
+| `GaussianDecomposition(def; copula)` | higher-order | yes | yes |
+| `GaussianMI`, `GaussianCMI` | `MIShannon`, `CMIShannon` | yes | yes |
+| `local_entropy(Kraskov(...), x)`, `local_entropy(KozachenkoLeonenko(...), x)` | Shannon differential entropy | yes | not yet |
+| `local_entropy(PlugIn(Shannon()), o, x)` | Shannon entropy | yes | computed on the CPU |
+
+"Higher-order" is `TotalCorrelation`, `DualTotalCorrelation`, `OInformation` and
+`SInformation`. Anything else throws an `ArgumentError` that names the estimator and lists
+the supported ones. Bias-corrected entropy estimators (`MillerMadow`, `ChaoShen`,
+`Jackknife`, `Schuermann`, ...) are not supported: their estimates are not sample means of
+per-sample terms.
+
+Notes:
+
+- **Discrete** local entropies are `-log(n(ω_t)/N)` from the counts of the joint outcomes,
+  with exactly the encoding Associations uses. With an embedding outcome space (e.g.
+  `OrdinalPatterns`) there is one local value per encoded symbol.
+- **Gaussian** local entropies are `½(d log 2π + log det Σ + N/(N-1) z'z)`, with Σ the
+  `N - 1`-normalised covariance that Associations uses and `z = L \ (x - μ)`. The factor
+  `N/(N-1)` makes the mean exactly Associations' closed form. This equals
+  `-log 𝒩(x; μ, Σ̂) + (d/2) log(N/(N-1))` with the maximum-likelihood covariance Σ̂; the
+  constant cancels in every mutual information and higher-order measure.
+- **k-NN** local entropies are the per-sample terms of ComplexityMeasures' `Kraskov`
+  (`-ψ(k) + ψ(N) + log V_D + D log ρ_t`) and `KozachenkoLeonenko`, with the same Euclidean
+  k-d tree search and Theiler window.
+
+## GPU
+
+`backend` takes a [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl)
+backend. CUDA support is a package extension, loaded by `using CUDA`:
+
+```julia
+using Associations, LocalInformation, CUDA
+
+X = [randn(10^6) for _ in 1:6]
+est = GaussianDecomposition(OInformation())
+ω = local_association(est, X...; backend = CUDABackend())                       # Vector{Float32}
+ω64 = local_association(est, X...; backend = CUDABackend(), precision = Float64)
+```
+
+`precision = nothing` (the default) computes in `Float64` on the CPU and `Float32` on a GPU.
+The result is always a host `Vector`. On the GPU, the Gaussian path computes the covariance,
+its Cholesky factors and log-determinants on the CPU in `Float64`, and the triangular solves
+and reductions over samples on the device. Discrete estimators count on the CPU whatever
+the backend. GPU k-NN searches are not implemented yet (an `ArgumentError` is thrown).
+
+## Relation to Associations.jl
+
+LocalInformation.jl owns its functions (`local_association`, `local_entropy`) and dispatches
+on Associations' estimator types. It builds on Associations' documented extension API
+(`Associations.subset_entropies`, `Associations.entropy_combination`; see the "Extending
+Associations" docs page): local higher-order measures are
+`Associations.entropy_combination(est.definition, H, 1:n)` with a callable `H` that returns
+a vector of local subset entropies.
+
+## Internal interfaces
+
+- `LocalInformation.local_subset_entropies(est, x...; backend, precision) → H`, with
+  `H(S)` a `Vector` of local joint entropies of `x[S]` (cached). One method per estimator
+  family; every local measure is built from it.
+- `LocalInformation.knn_distances(points, k, w; metric, backend, precision)`: distances to
+  the `k`-th nearest neighbour outside a Theiler window, dispatched on the backend.
+- `LocalInformation.resolve_precision`, `to_device`, `to_host`: backend and precision
+  handling.
+
+## Installation
+
+The package currently depends on an unreleased branch of Associations.jl, given by a
+`[sources]` entry in `Project.toml` (which needs Julia ≥ 1.11).
+
+## Tests
+
+```julia
+julia --project=test test/runtests.jl
+```
+
+The GPU tests run only if `CUDA.functional()`. `test/fixtures/syntropy_fixtures.json` holds
+reference pointwise values from the Python package syntropy, produced by
+`test/fixtures/generate_syntropy_fixtures.py`.
