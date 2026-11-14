@@ -22,6 +22,7 @@ const BASES = (2, ℯ)
     @testset "k-NN" begin include("test_knn.jl") end
     @testset "Higher-order and exact values" begin include("test_higher_order.jl") end
     @testset "Cross-check against syntropy" begin include("test_syntropy.jl") end
+    @testset "Partial information decomposition" begin include("test_pid.jl") end
     @testset "Unsupported estimators" begin include("test_errors.jl") end
     @testset "GPU (CUDA)" begin include("test_gpu.jl") end
 end
