@@ -45,6 +45,6 @@ include("bivariate.jl")
 include("higher_order.jl")
 
 # Phase 5 (local PID redundancy functions) goes here:
-# include("pid.jl")
+include("pid.jl")
 
 end # module
