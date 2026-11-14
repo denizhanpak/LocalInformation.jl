@@ -23,7 +23,9 @@ up to floating-point rounding (and up to the `precision` used on a GPU).
 |:--|:--|:--|
 | `JointProbabilities(def, CodifyVariables(o))` | `MIShannon`, `CMIShannon`, higher-order | no (computed on the CPU) |
 | `EntropyDecomposition(def, PlugIn(Shannon()), d)` | `MIShannon`, `CMIShannon`, higher-order | no (computed on the CPU) |
-| `EntropyDecomposition(def, Kraskov(...))`, `EntropyDecomposition(def, KozachenkoLeonenko(...))` | `MIShannon`, `CMIShannon`, higher-order | not yet |
+| `EntropyDecomposition(def, Kraskov(...))`, `EntropyDecomposition(def, KozachenkoLeonenko(...))` | `MIShannon`, `CMIShannon`, higher-order | yes |
+| `KSG1`, `KSG2` (`KraskovStögbauerGrassberger1/2`) | `MIShannon` | yes |
+| `FPVP` | `CMIShannon` | yes |
 | `GaussianDecomposition(def; copula)` | higher-order | yes |
 | `GaussianMI`, `GaussianCMI` | `MIShannon`, `CMIShannon` | yes |
 
@@ -75,7 +77,8 @@ Supported estimators (from ComplexityMeasures.jl):
     `local_entropy(o, x)` uses `PlugIn(Shannon())` (base 2).
 
 `backend` and `precision` are as for [`local_association`](@ref). The k-NN estimators run
-on the CPU only for now; the discrete estimator always computes on the CPU.
+on the CPU (k-d tree) or on a GPU (exact brute-force kernel); the discrete estimator always
+computes on the CPU.
 """
 function local_entropy end
 
@@ -141,6 +144,7 @@ Supported estimators: \
 `JointProbabilities(def, CodifyVariables(o))` (plug-in probabilities), \
 `EntropyDecomposition(def, PlugIn(Shannon()), discretization)`, \
 `EntropyDecomposition(def, Kraskov(; k))`, `EntropyDecomposition(def, KozachenkoLeonenko())`, \
+`KSG1(MIShannon())`, `KSG2(MIShannon())`, `FPVP(CMIShannon())`, \
 `GaussianDecomposition(def)` (higher-order `def` only), `GaussianMI()` and `GaussianCMI()`, \
 where `def` is `MIShannon()`, `CMIShannon()` or a higher-order measure \
 (`TotalCorrelation`, `DualTotalCorrelation`, `OInformation`, `SInformation`). \

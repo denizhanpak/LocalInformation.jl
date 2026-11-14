@@ -11,7 +11,7 @@
 # V_D is the volume of the D-dimensional Euclidean unit ball.
 #
 # The neighbour step is `knn_distances(backend, points, k, w, metric, T)`: the CPU method
-# uses NearestNeighbors.jl; a GPU method can be added for `KA.GPU` backends.
+# uses NearestNeighbors.jl; other (GPU) backends use the brute-force kernel in `gpu_knn.jl`.
 
 """
     knn_distances(points, k::Integer, w::Integer = 0; metric = Euclidean(), backend = CPU(), precision = nothing) → Vector{T}
@@ -28,9 +28,9 @@ whose columns are the points. `metric` is a Distances.jl metric (`Euclidean()`,
 The second, positional form is the backend-dispatched implementation called by the first,
 with `P` a `D × N` host matrix (`Float64`, one column per point) and
 `T = LocalInformation.resolve_precision(backend, precision)`. The `CPU` method uses a
-`NearestNeighbors.KDTree`. To support another backend, add a method for its type, e.g.
-`LocalInformation.knn_distances(::KernelAbstractions.GPU, P::AbstractMatrix, k::Int, w::Int, metric, ::Type{T})`;
-without one, an `ArgumentError` is thrown.
+`NearestNeighbors.KDTree` (in `Float64`, converted to `T`); any other KernelAbstractions
+backend (a GPU) uses the exact brute-force kernel [`LocalInformation.gpu_knn`](@ref), in
+precision `T` and for the metrics `Euclidean()`, `Chebyshev()` and `Cityblock()`.
 """
 function knn_distances(points, k::Integer, w::Integer = 0;
         metric = Euclidean(), backend = CPU(), precision = nothing)
@@ -51,13 +51,6 @@ end
 point_matrix(X::AbstractStateSpaceSet) = permutedims(Matrix{Float64}(Matrix(X)))
 point_matrix(x::AbstractVector{<:Real}) = Matrix{Float64}(reshape(x, 1, :))
 point_matrix(P::AbstractMatrix{<:Real}) = Matrix{Float64}(P)
-
-function knn_distances(backend::KA.Backend, P::AbstractMatrix, k::Int, w::Int, metric, ::Type{T}) where {T}
-    throw(ArgumentError(
-        "k-nearest-neighbour searches are not implemented for the backend " *
-        "$(nameof(typeof(backend))) yet. Use `backend = CPU()`."
-    ))
-end
 
 function knn_distances(::KA.CPU, P::AbstractMatrix, k::Int, w::Int, metric, ::Type{T}) where {T}
     tree = KDTree(P, metric)

@@ -38,7 +38,7 @@ include("gaussian.jl")
 include("knn.jl")
 
 # Phase 3 (dedicated KSG/k-NN estimators and the GPU k-NN kernel) goes here:
-# include("ksg.jl")
+include("ksg.jl")
 
 # Local measures built from local subset entropies.
 include("bivariate.jl")
