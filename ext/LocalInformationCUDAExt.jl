@@ -1,7 +1,7 @@
 # CUDA support. The Gaussian path is backend-generic (KernelAbstractions allocation,
 # `ldiv!` on a `LowerTriangular` CuMatrix, which CUDA.jl maps to CUBLAS trsm, and GPUArrays
-# reductions), so this extension only validates the backend. Phase 3 adds the GPU k-NN
-# kernel (a `LocalInformation.knn_distances(::KernelAbstractions.GPU, ...)` method).
+# reductions), and so are the k-NN kernels (KernelAbstractions, `src/gpu_knn.jl`), so this
+# extension only validates the backend.
 module LocalInformationCUDAExt
 
 using CUDA: CUDA, CUDABackend

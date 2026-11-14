@@ -34,8 +34,8 @@ if CUDA.functional()
     l = local_association(est, x, y; backend = gpu)
     @test eltype(l) === Float32
     @test l ≈ local_association(est, x, y) rtol = 1e-6
-    # No GPU k-NN yet (Phase 3 adds it).
-    @test_throws ArgumentError local_association(EntropyDecomposition(MIShannon(), Kraskov()), x, y; backend = gpu)
+    # k-NN estimators run on the GPU (more in test_gpu_knn.jl).
+    @test eltype(local_association(EntropyDecomposition(MIShannon(), Kraskov()), x, y; backend = gpu)) === Float32
 else
     @info "CUDA not functional; skipping GPU tests."
     @test_skip false

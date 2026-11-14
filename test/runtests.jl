@@ -20,6 +20,8 @@ const BASES = (2, ℯ)
     @testset "Discrete plug-in" begin include("test_discrete.jl") end
     @testset "Gaussian" begin include("test_gaussian.jl") end
     @testset "k-NN" begin include("test_knn.jl") end
+    @testset "KSG1, KSG2, FPVP" begin include("test_ksg.jl") end
+    @testset "GPU k-NN (CUDA)" begin include("test_gpu_knn.jl") end
     @testset "Higher-order and exact values" begin include("test_higher_order.jl") end
     @testset "Cross-check against syntropy" begin include("test_syntropy.jl") end
     @testset "Unsupported estimators" begin include("test_errors.jl") end

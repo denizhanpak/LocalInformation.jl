@@ -38,11 +38,13 @@ Values are in the unit `est.definition.base` (bits by default).
 |:--|:--|:-:|:-:|
 | `JointProbabilities(def, CodifyVariables(o))` (plug-in) | `MIShannon`, `CMIShannon`, higher-order | yes | computed on the CPU |
 | `EntropyDecomposition(def, PlugIn(Shannon()), CodifyVariables(o))` | `MIShannon`, `CMIShannon`, higher-order | yes | computed on the CPU |
-| `EntropyDecomposition(def, Kraskov(; k, w))` | `MIShannon`, `CMIShannon`, higher-order | yes | not yet |
-| `EntropyDecomposition(def, KozachenkoLeonenko(; w))` | `MIShannon`, `CMIShannon`, higher-order | yes | not yet |
+| `EntropyDecomposition(def, Kraskov(; k, w))` | `MIShannon`, `CMIShannon`, higher-order | yes | yes |
+| `EntropyDecomposition(def, KozachenkoLeonenko(; w))` | `MIShannon`, `CMIShannon`, higher-order | yes | yes |
+| `KSG1(; k, w, metric_marginals)`, `KSG2(; k, w, metric_marginals)` | `MIShannon` | yes | yes |
+| `FPVP(; k, w)` | `CMIShannon` | yes | yes |
 | `GaussianDecomposition(def; copula)` | higher-order | yes | yes |
 | `GaussianMI`, `GaussianCMI` | `MIShannon`, `CMIShannon` | yes | yes |
-| `local_entropy(Kraskov(...), x)`, `local_entropy(KozachenkoLeonenko(...), x)` | Shannon differential entropy | yes | not yet |
+| `local_entropy(Kraskov(...), x)`, `local_entropy(KozachenkoLeonenko(...), x)` | Shannon differential entropy | yes | yes |
 | `local_entropy(PlugIn(Shannon()), o, x)` | Shannon entropy | yes | computed on the CPU |
 
 "Higher-order" is `TotalCorrelation`, `DualTotalCorrelation`, `OInformation` and
@@ -64,6 +66,11 @@ Notes:
 - **k-NN** local entropies are the per-sample terms of ComplexityMeasures' `Kraskov`
   (`-ψ(k) + ψ(N) + log V_D + D log ρ_t`) and `KozachenkoLeonenko`, with the same Euclidean
   k-d tree search and Theiler window.
+- **KSG1 / KSG2 / FPVP** local values are the per-sample terms of Associations' estimators,
+  e.g. `ψ(k) + ψ(N) - ψ(n_x(t)) - ψ(n_y(t))` for `KSG1`, with Associations' conventions:
+  Chebyshev joint k-th neighbour outside the Theiler window, marginal counts `≤ ε_t`
+  including the point itself and without Theiler window. (Kraskov et al. count strictly
+  inside ε, as does syntropy; the difference is exactly accounted for in the tests.)
 
 ## GPU
 
@@ -83,7 +90,11 @@ est = GaussianDecomposition(OInformation())
 The result is always a host `Vector`. On the GPU, the Gaussian path computes the covariance,
 its Cholesky factors and log-determinants on the CPU in `Float64`, and the triangular solves
 and reductions over samples on the device. Discrete estimators count on the CPU whatever
-the backend. GPU k-NN searches are not implemented yet (an `ArgumentError` is thrown).
+the backend. k-NN searches and range counts on a GPU use an exact brute-force
+KernelAbstractions kernel (O(N²) work, O(N) memory; metrics `Chebyshev`, `Euclidean`,
+`Cityblock`). In `Float64` the neighbour counts equal the CPU's on continuous data; in
+`Float32` a distance that rounds across a radius can shift a count by one (≲ 0.1% of samples
+in the tests), which changes that sample's local value by up to `ψ(n+1) - ψ(n) = 1/n`.
 
 ## Relation to Associations.jl
 
