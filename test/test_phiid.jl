@@ -364,13 +364,8 @@ end
         JointProbabilities(IIDec(; τ = 2), CodifyVariables(OrdinalPatterns{3}())), randn(rng, 4), randn(rng, 4))))
     @test occursin("same number of samples", msg_of(() -> association(est, x, y[1:50])))
     @test occursin("must be an `AbstractVector`", msg_of(() -> association(est, x, hcat(y, z))))
-    # Redundancy functions without a ΦID double redundancy.
-    for r in (ISx(), IPM())
-        m = msg_of(() -> association(JointProbabilities(IIDec(r), UE), x, y))
-        @test occursin("not yet supported for ΦID", m) && occursin(string(nameof(typeof(r))), m)
-    end
+    # Redundancy functions without a ΦID double redundancy (ISx/IPM errors: test_phiid_pointwise.jl).
     @test occursin("no double-redundancy form", msg_of(() -> association(JointProbabilities(IIDec(IMin()), UE), x, y)))
-    @test occursin("not yet supported", msg_of(() -> association(GaussianDecomposition(IIDec(ISx())), randn(rng, 50), randn(rng, 50))))
     # Unsupported estimators.
     @test occursin("CodifyPoints", msg_of(() -> association(
         JointProbabilities(IIDec(), CodifyPoints(UniqueElementsEncoding(x))), x, y)))
@@ -378,12 +373,7 @@ end
     # The past/future entry point.
     @test occursin("same number of variables", msg_of(() -> LI.phiid_from_past_future(est, (x, y), (z,))))
     @test occursin("got 1", msg_of(() -> LI.phiid_from_past_future(est, (x,), (z,))))
-    # No per-sample ΦID yet.
-    for e in (est, GaussianDecomposition(IIDec()), EntropyDecomposition(IIDec(), Kraskov(; k = 3)),
-              EntropyDecomposition(IIDec(), PlugIn(Shannon()), UE))
-        m = msg_of(() -> local_association(e, randn(rng, 50), randn(rng, 50)))
-        @test occursin("Per-sample (local) ΦID atoms are not implemented", m) && occursin("association(est", m)
-    end
+    # Per-sample ΦID errors: test_phiid_pointwise.jl and test_phiid_local_mmi.jl.
 end
 
 @testset "Cross-check against syntropy" begin

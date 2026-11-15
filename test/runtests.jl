@@ -26,6 +26,8 @@ const BASES = (2, ℯ)
     @testset "Cross-check against syntropy" begin include("test_syntropy.jl") end
     @testset "Partial information decomposition" begin include("test_pid.jl") end
     @testset "Integrated information decomposition" begin include("test_phiid.jl") end
+    @testset "ΦID with ISx and IPM" begin include("test_phiid_pointwise.jl") end
+    @testset "Local ΦID with MMI" begin include("test_phiid_local_mmi.jl") end
     @testset "Unsupported estimators" begin include("test_errors.jl") end
     @testset "GPU (CUDA)" begin include("test_gpu.jl") end
 end

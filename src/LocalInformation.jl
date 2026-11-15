@@ -49,5 +49,7 @@ include("pid.jl")
 
 # Integrated information decomposition (ΦID); uses the PID helpers above.
 include("phiid.jl")
+include("phiid_pointwise.jl")
+include("phiid_local_mmi.jl")
 
 end # module
