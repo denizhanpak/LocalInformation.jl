@@ -14,7 +14,9 @@ The element type used when `precision = nothing`: `Float64` on `CPU()`, `Float32
 GPU backend (consumer GPUs run `Float64` at a small fraction of the `Float32` rate).
 """
 default_precision(::KA.CPU) = Float64
-default_precision(::KA.GPU) = Float32
+# `KA.GPU` is a deprecated alias of `KA.Backend` in KernelAbstractions 0.10; the `KA.CPU`
+# method above is more specific, so every other backend gets `Float32`.
+default_precision(::KA.Backend) = Float32
 
 """
     LocalInformation.check_backend(backend) → nothing

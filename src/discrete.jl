@@ -92,7 +92,43 @@ end
 # ----------------------------------------------------------------------------------------
 # Per-sample outcomes of one variable, as counted by `probabilities(o, x)`.
 single_codes(::UniqueElements, x) = collect(x)
-single_codes(o::OutcomeSpace, x) = codify(o, x)
+function single_codes(o::OutcomeSpace, x)
+    if !is_counting_based(o)
+        throw(ArgumentError(
+            "Local plug-in entropy needs an outcome space whose probabilities are relative " *
+            "counts of per-sample outcomes, and $(nameof(typeof(o))) is not counting-based " *
+            "(`is_counting_based(o) == false`). Use e.g. `OrdinalPatterns`, `ValueBinning` " *
+            "or `UniqueElements`."
+        ))
+    end
+    c = codify(o, x)
+    check_count_based(o, x, c)
+    return c
+end
+
+# The local plug-in entropy -log(n/N) only averages to `information(est, o, x)` when
+# `probabilities(o, x)` are the relative counts of the outcomes that `codify(o, x)` returns.
+# Weighted outcome spaces (`WeightedOrdinalPatterns`, `AmplitudeAwareOrdinalPatterns`) are
+# not counting-based at all. Some counting-based spaces still fail this: `Dispersion`'s
+# `codify` gives one Gaussian-CDF symbol per sample, but `probabilities` counts dispersion
+# patterns (embedding vectors of symbols), so the two describe different outcomes.
+function check_count_based(o::OutcomeSpace, x, c)
+    p = sort!(filter(>(0), collect(probabilities(o, x).p)))
+    counts = Dict{eltype(c),Int}()
+    for ci in c
+        counts[ci] = get(counts, ci, 0) + 1
+    end
+    q = sort!([n / length(c) for n in values(counts)])
+    if length(p) != length(q) || !isapprox(p, q; rtol = 1e-10)
+        throw(ArgumentError(
+            "The probabilities of $(nameof(typeof(o))) are not the relative counts of the " *
+            "per-sample outcomes that `codify` returns, so local plug-in entropies would not " *
+            "average to `information`. Use e.g. `OrdinalPatterns`, `ValueBinning` or " *
+            "`UniqueElements`."
+        ))
+    end
+    return nothing
+end
 # `ValueBinning` encodes points outside the binning as -1, and `probabilities(o, x)` drops
 # them (with `precise = false`, the maximum point can fall outside). Such samples have no
 # local entropy that is consistent with `information(est, o, x)`.

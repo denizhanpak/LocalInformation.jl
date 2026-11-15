@@ -1,6 +1,25 @@
 # GPU k-NN kernel, k-NN entropies and KSG/FPVP on the GPU. Run only when CUDA is functional.
 using CUDA
 
+# The KernelAbstractions kernels also run on the CPU backend, so they are checked against
+# the k-d tree even without a GPU: edge sizes around the 256-point tile, small N, Theiler
+# windows. Distances and indices must match exactly in Float64 on continuous data.
+@testset "k-NN and range-count kernels on the KernelAbstractions CPU backend" begin
+    krng = Xoshiro(41)
+    for N in (5, 7, 37, 255, 256, 257, 600), D in (1, 3),
+            metric in (LI.Chebyshev(), LI.Cityblock(), LI.Euclidean()), k in (1, 3), w in (0, 1, 2)
+        N - (2w + 1) ≥ k || continue
+        P = randn(krng, D, N)
+        dc, ic = LI.kth_neighbours(CPU(), P, k, w, metric, Float64)
+        dg, ig = LI.gpu_knn(CPU(), P, k, w, metric, Float64)
+        @test dg ≈ dc rtol = 1e-12
+        @test ig == ic
+        r = dc .* 1.5
+        @test LI.gpu_range_counts(CPU(), P, r, metric, Float64) == LI.range_counts(CPU(), P, r, metric, Float64)
+    end
+end
+
+
 if CUDA.functional()
     gpu = CUDABackend()
     rng = Xoshiro(17)
