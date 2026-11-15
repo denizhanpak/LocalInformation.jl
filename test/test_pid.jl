@@ -232,3 +232,37 @@ end
         @test_skip false
     end
 end
+
+# High-cardinality sources take the hash-table branch of `joint_labels` (taken when the
+# product of the two state counts exceeds max(4N, 2^16)).
+@testset "Many states: hash-table joint labels" begin
+    LI = LocalInformation
+    g = Xoshiro(21)
+    N = 1000
+    a = rand(g, 1:400, N); b = rand(g, 1:400, N)
+    la, ka = LI.relabel(a); lb, kb = LI.relabel(b)
+    @test widemul(ka, kb) > max(4N, 1 << 16)   # the branch under test
+    labels, k = LI.joint_labels(la, ka, lb, kb)
+    ref, kref = LI.relabel(collect(zip(la, lb)))
+    @test labels == ref && k == kref
+    # The dense branch gives the same labels on small inputs.
+    sa, ska = LI.relabel(rand(g, 1:5, 200)); sb, skb = LI.relabel(rand(g, 1:5, 200))
+    @test first(LI.joint_labels(sa, ska, sb, skb)) == first(LI.relabel(collect(zip(sa, sb))))
+
+    # End to end: with high-cardinality sources, single-source redundancies still equal
+    # Associations' mutual information, local atoms still average to the PIDResult atoms,
+    # and per-sample atoms still sum to the local MI.
+    x1 = rand(g, 1:400, N); x2 = rand(g, 1:400, N); t = mod.(x1 .+ x2, 3)
+    d = CodifyVariables(UniqueElements())
+    for r in (ISx(), IPM())
+        est = pidest(r)
+        res = association(est, x1, x2, t)
+        @test unique_information(res, 1) + redundancy(res) ≈
+              association(JointProbabilities(MIShannon(; base = 2), d), x1, t) atol = 1e-10
+        lres = local_association(est, x1, x2, t)
+        for (node, _) in atoms(res)
+            @test mean(atom(lres, node)) ≈ atom(res, node) atol = 1e-10
+        end
+        @test vec(sum(lres.atoms; dims = 2)) ≈ localmi((x1, x2), t) atol = 1e-9
+    end
+end
