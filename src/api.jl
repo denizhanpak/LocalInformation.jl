@@ -75,6 +75,11 @@ Supported estimators (from ComplexityMeasures.jl):
     ``h_i = -\\log(n(\\omega_i) / N)``, where ``\\omega_i`` is the outcome of the `i`-th
     encoded symbol, ``n(\\omega)`` its count and ``N`` the number of symbols.
     `local_entropy(o, x)` uses `PlugIn(Shannon())` (base 2).
+    This needs `probabilities(o, x)` to be the relative counts of the outcomes that
+    `codify(o, x)` returns. It throws an `ArgumentError` otherwise: for outcome spaces that
+    are not counting-based (`WeightedOrdinalPatterns`, `AmplitudeAwareOrdinalPatterns`,
+    `PowerSpectrum`, …) and for `Dispersion`, whose `codify` gives per-sample symbols while
+    its probabilities count dispersion patterns.
 
 `backend` and `precision` are as for [`local_association`](@ref). The k-NN estimators run
 on the CPU (k-d tree) or on a GPU (exact brute-force kernel); the discrete estimator always
