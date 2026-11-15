@@ -10,7 +10,7 @@
 # with Z the zeta matrix of the PID lattice (Z[i, j] = 1 iff node i ≼ node j). For
 # per-sample values, with local redundancies as rows, vec(Π)ᵀ = vec(R)ᵀ (Z⁻¹ ⊗ Z⁻¹).
 #
-# Layout conventions (shared with later phases):
+# Layout conventions (shared by phiid_pointwise.jl and phiid_local_mmi.jl):
 # - Nodes are referred to by their index in `redundancy_lattice(n).nodes` ("node order").
 # - Average redundancies and atoms are m × m matrices in node order, rows = past node,
 #   columns = future node. Per-sample values are K × m² matrices whose column
@@ -21,7 +21,14 @@
 # Pipeline: `association(est, x...)` → `phiid_prepare` (validate, encode discrete data once
 # over the full series, lag by τ) → `phiid_from_past_future(est′, past, future)` →
 # `phiid_redundancies(r, est′, lattice, past, future)` (the extension hook, m × m) →
-# `phiid_mobius` → `PhiIDResult`. Per-sample atoms go through `phiid_local_atoms`.
+# `phiid_mobius` → `PhiIDResult`.
+#
+# Per-sample atoms (`local_association` → `LocalPhiIDResult`), after the same `phiid_prepare`:
+# - ISx, IPM (phiid_pointwise.jl): `local_phiid_from_past_future` computes the local double
+#   redundancies once per distinct joint state and inverts them with `phiid_local_atoms`.
+# - IMMI (phiid_local_mmi.jl): `local_phiid_mmi` selects one local mutual information per
+#   atom column and folds selection and inversion into one product `Lmi * W`; it does not
+#   use `phiid_local_atoms`.
 
 using Associations: RedundancyFunction, RedundancyLattice, IMMI, IMin, redundancy_lattice,
     lattice_node_vectors, MultivariateInformationMeasureEstimator
@@ -34,14 +41,20 @@ export IntegratedInformationDecomposition, PhiIDResult, LocalPhiIDResult, inform
 
 The integrated information decomposition (ΦID) of Mediano, Rosas et al. of the information
 that the past of a system of `n` variables carries about its future, using the double
-redundancy built from the [`RedundancyFunction`](@ref) `redundancy`.
+redundancy built from the `RedundancyFunction` `redundancy`: `IMMI()` (the default),
+[`ISx`](@ref)`()` or [`IPM`](@ref)`()`.
 
 ## Usage
 
-`association(est, x₁, …, xₙ)` with an estimator `est` whose `definition` is an
-`IntegratedInformationDecomposition`. The result is a [`PhiIDResult`](@ref); use
-`atom(res, α => β)`, `atoms(res)` and, for two variables, `atom(res, :xty)` and
-[`information_dynamics`](@ref)`(res)`.
+With an estimator `est` whose `definition` is an `IntegratedInformationDecomposition`:
+
+- `association(est, x₁, …, xₙ)` returns a [`PhiIDResult`](@ref), the average atoms;
+- [`local_association`](@ref)`(est, x₁, …, xₙ)` returns a [`LocalPhiIDResult`](@ref), the
+    atoms of every lagged sample, whose means are the average atoms.
+
+For both, use `atom(res, α => β)`, `atoms(res)` and, for two variables, `atom(res, :xty)`
+and [`information_dynamics`](@ref)`(res)`. Which estimators work with which redundancy
+function is listed under "Estimators" below.
 
 ## Inputs
 
@@ -67,9 +80,10 @@ and the matrices ``R_{\\alpha\\beta} = I_\\cap^{\\alpha \\to \\beta}`` and ``\\P
 ``R = Z^\\top \\Pi Z`` and ``\\Pi = Z^{-\\top} R Z^{-1}``. The atoms sum to
 ``I(\\mathbf{X}_t; \\mathbf{X}_{t+\\tau})``. For every past node ``\\alpha``,
 ``\\sum_\\beta \\Pi(\\alpha \\to \\beta)`` is the PID atom ``\\alpha`` of the information that the
-past variables carry about the joint future (and symmetrically for the future nodes).
+past variables carry about the joint future, in the PID with the same redundancy function
+(and symmetrically for the future nodes).
 
-With [`IMMI`](@ref) (minimum mutual information, the default), the double redundancy is
+With `IMMI()` (minimum mutual information, the default), the double redundancy is
 
 ```math
 I_\\cap^{\\alpha \\to \\beta} = \\min_{A \\in \\alpha,\\, B \\in \\beta} I(\\mathbf{X}^A_t; \\mathbf{X}^B_{t+\\tau}),
@@ -80,20 +94,37 @@ the ΦID used by `phyid` (Luppi et al. 2022). Like the PID with ``I_{MMI}``, it 
 redundancy whenever several source sets carry the same *amount* of information: for two
 independent copied bits (``X^1_{t+1} = X^1_t``, ``X^2_{t+1} = X^2_t``) it gives 1 bit of
 ``\\{1\\}\\{2\\} \\to \\{12\\}``, not only 1 bit each of ``\\{1\\} \\to \\{1\\}`` and
-``\\{2\\} \\to \\{2\\}``. Other redundancy functions throw an `ArgumentError`.
+``\\{2\\} \\to \\{2\\}``.
+
+With [`ISx`](@ref) (the shared-exclusion double redundancy ``i^{\\tau sx}_\\cap`` of
+Varley 2023) and [`IPM`](@ref) (the ``i_\\pm`` of Finn & Lizier 2018 with past and future
+source sets), the double redundancy is the mean over samples of a pointwise double
+redundancy computed from plug-in probabilities of the joint states. These two need
+discrete data: `JointProbabilities` with a `CodifyVariables` discretization. The
+formulas are in the docstring of `local_association` for these redundancy functions.
+`IMin` has no double-redundancy form and throws an `ArgumentError`.
 
 For two variables the atoms have names (as in `phyid`): `:αtβ` with `α` (past) and `β`
 (future) one of `r` = ``\\{1\\}\\{2\\}`` (redundancy), `x` = ``\\{1\\}``, `y` = ``\\{2\\}``,
 `s` = ``\\{12\\}`` (synergy), e.g. `:rtr`, `:xty`, `:sts`.
 
-## Compatible estimators
+## Estimators
 
-| Estimator | Notes |
-|:--|:--|
-| `JointProbabilities(def, CodifyVariables(o))` | plug-in probabilities (`RelativeAmount`) |
-| `EntropyDecomposition(def, PlugIn(Shannon()), CodifyVariables(o))` | or another discrete Shannon entropy estimator |
-| `EntropyDecomposition(def, Kraskov(; k))`, `EntropyDecomposition(def, KozachenkoLeonenko())` | or another differential Shannon entropy estimator |
-| `GaussianDecomposition(def; copula)` | closed-form Gaussian entropies |
+With `def = IntegratedInformationDecomposition(r; τ, base)`:
+
+| Estimator | `IMMI`, `association` | `IMMI`, `local_association` | `ISx`, `IPM`: `association` and `local_association` |
+|:--|:-:|:-:|:-:|
+| `JointProbabilities(def, CodifyVariables(o))` (plug-in) | yes | yes | yes |
+| `EntropyDecomposition(def, PlugIn(Shannon()), CodifyVariables(o))` | yes | yes | no |
+| `EntropyDecomposition(def, e, CodifyVariables(o))`, `e` another discrete Shannon estimator (e.g. `MillerMadow()`) | yes | no | no |
+| `EntropyDecomposition(def, Kraskov(; k))`, `EntropyDecomposition(def, KozachenkoLeonenko())` | yes | yes, CPU or GPU | no |
+| `EntropyDecomposition(def, e)`, `e` another differential Shannon estimator | yes | no | no |
+| `GaussianDecomposition(def; copula)` | yes | yes, CPU or GPU | no |
+
+`local_association` needs entropies that are means of per-sample terms; the "no" cases,
+and other estimators, throw an `ArgumentError`. Discrete estimators count on the CPU; the
+Möbius inversion of the per-sample atoms runs on the `backend` given to
+`local_association`.
 
 With a discretization, each series is encoded *once*, over its full length, and the codes
 are then lagged, so the past and the future of a variable share one encoding. With an
@@ -109,8 +140,9 @@ x, y = rand(0:1, 10_001), rand(0:1, 10_001)
 y[2:end] .= x[1:end-1]                       # x is copied into y
 est = JointProbabilities(IntegratedInformationDecomposition(), CodifyVariables(UniqueElements()))
 res = association(est, x, y)                 # PhiIDResult
-atom(res, :xty)                              # == atom(res, [[1]] => [[2]])
+atom(res, :xty)                              # ≈ 1 bit; == atom(res, [[1]] => [[2]])
 information_dynamics(res).transfer
+loc = local_association(est, x, y)           # LocalPhiIDResult, 10_000 × 16 atoms
 ```
 
 ## References
@@ -120,9 +152,16 @@ information_dynamics(res).transfer
     arXiv:1909.02297.
 - Mediano, P. A. M., Rosas, F. E., Luppi, A. I., Carhart-Harris, R. L., Bor, D.,
     Seth, A. K., & Barrett, A. B. (2021). Towards an extended taxonomy of information
-    dynamics via Integrated Information Decomposition. arXiv:2109.13186.
+    dynamics via Integrated Information Decomposition. arXiv:2109.13186. Published as:
+    Toward a unified taxonomy of information dynamics via Integrated Information
+    Decomposition. PNAS, 122(39), e2423297122 (2025). doi:10.1073/pnas.2423297122.
 - Luppi, A. I., Mediano, P. A. M., Rosas, F. E., et al. (2022). A synergistic core for
     human brain evolution and cognition. Nature Neuroscience, 25, 771–782.
+- Varley, T. F. (2023). Decomposing past and future: Integrated information decomposition
+    based on shared probability mass exclusions. PLOS ONE, 18(3), e0282950.
+    doi:10.1371/journal.pone.0282950.
+- Finn, C., & Lizier, J. T. (2018). Pointwise partial information decomposition using the
+    specificity and ambiguity lattices. Entropy, 20(4), 297.
 """
 struct IntegratedInformationDecomposition{R<:RedundancyFunction,B} <: MultivariateInformationMeasure
     redundancy::R
@@ -366,11 +405,22 @@ end
     LocalPhiIDResult
 
 A per-sample (local) integrated information decomposition: the local atoms of every
-sample of the lagged system, with the same accessors as [`PhiIDResult`](@ref) returning
-per-sample vectors (views). Per-sample atoms are the inversion of per-sample double
-redundancies, so they need a double redundancy that is a mean of per-sample terms; it is
-built from them by `LocalInformation.local_phiid_result`. `local_association` does not
-return it yet for any estimator (it throws an `ArgumentError`).
+sample of the lagged system (row `t`: the past at time `t`, the future at `t + τ`), with
+the same accessors as [`PhiIDResult`](@ref) returning per-sample vectors (views).
+
+[`local_association`](@ref) returns it for an estimator of an
+[`IntegratedInformationDecomposition`](@ref) with
+
+- `IMMI` (the default): `JointProbabilities`, `EntropyDecomposition` with
+    `PlugIn(Shannon())`, `Kraskov` or `KozachenkoLeonenko`, and `GaussianDecomposition`.
+    The local double redundancy of each atom is the local mutual information of the pair
+    of variable sets with the smallest mean, the convention of `phyid`.
+- [`ISx`](@ref) or [`IPM`](@ref): `JointProbabilities` with a `CodifyVariables`
+    discretization. The local double redundancies are pointwise functions of the joint
+    state of a sample.
+
+In both cases the local atoms are the Möbius inversion of per-sample double redundancies
+whose means are the average double redundancies.
 
 ## Fields
 
@@ -436,9 +486,10 @@ The modes are disjoint and cover all 16 atoms, so they sum to
 - Mediano, P. A. M., Rosas, F. E., Luppi, A. I., et al. (2021). Towards an extended
     taxonomy of information dynamics via Integrated Information Decomposition.
     arXiv:2109.13186.
-- Mediano, P. A. M., Rosas, F. E., Luppi, A. I., et al. (2025). Proceedings of the
-    National Academy of Sciences, 122(39), e2423297122 (the published version of the
-    above).
+- Mediano, P. A. M., Rosas, F. E., Luppi, A. I., et al. (2025). Toward a unified taxonomy
+    of information dynamics via Integrated Information Decomposition. Proceedings of the
+    National Academy of Sciences, 122(39), e2423297122. doi:10.1073/pnas.2423297122 (the
+    published version of the above).
 """
 function information_dynamics(res::PhiIDResult)
     check_two_variables(res)
@@ -499,11 +550,15 @@ const PHIID_ESTIMATORS = Union{
 }
 
 const PHIID_SUPPORTED_ESTIMATORS = """
-Supported estimators: `JointProbabilities(def, CodifyVariables(o))` (plug-in \
-probabilities), `EntropyDecomposition(def, PlugIn(Shannon()), CodifyVariables(o))`, \
+Supported estimators: with `def = IntegratedInformationDecomposition(IMMI())` (the \
+default), `JointProbabilities(def, CodifyVariables(o))` (plug-in probabilities), \
+`EntropyDecomposition(def, PlugIn(Shannon()), CodifyVariables(o))`, \
 `EntropyDecomposition(def, Kraskov(; k))`, `EntropyDecomposition(def, KozachenkoLeonenko())` \
-and `GaussianDecomposition(def)`, with `def = IntegratedInformationDecomposition(IMMI())`; \
-e.g. `association(JointProbabilities(IntegratedInformationDecomposition(), \
+and `GaussianDecomposition(def)` (average and per-sample atoms), and other discrete or \
+differential Shannon entropy estimators in an `EntropyDecomposition` (average atoms only); \
+with `def = IntegratedInformationDecomposition(ISx())` or `IPM()`, only \
+`JointProbabilities(def, CodifyVariables(o))`. For example, \
+`association(JointProbabilities(IntegratedInformationDecomposition(), \
 CodifyVariables(UniqueElements())), x, y)`."""
 
 function unsupported_phiid_estimator(est, why = "")
@@ -664,7 +719,13 @@ as variable sets.
 - `IMMI`, any estimator with `Associations.subset_entropies`:
     `R[i, j] = min(I(past_A; future_B) for A in αᵢ, B in αⱼ)`, with
     `I = H(A) + H(B) - H(A ∪ B)` (one mutual information per pair of variable sets).
-- Every other redundancy function throws an `ArgumentError`.
+- [`ISx`](@ref) and [`IPM`](@ref) with `JointProbabilities` (a `CodifyVariables`
+    discretization, plug-in probabilities; `src/phiid_pointwise.jl`): the mean over
+    samples of the pointwise double redundancies, computed once per distinct joint state
+    of the `2n` inputs from their [`LocalInformation.SubsetCounts`](@ref). Other
+    estimators throw an `ArgumentError`.
+- `IMin` (no double-redundancy form) and every other redundancy function throw an
+    `ArgumentError`.
 
 Add a method for a new redundancy function (and estimator), e.g.
 `LocalInformation.phiid_redundancies(r::MyRedundancy, est::JointProbabilities, lattice, past, future)`.
@@ -685,11 +746,10 @@ function phiid_redundancies(::IMMI, est, lattice::PhiIDLattice, past::Tuple, fut
     return [minimum(mi[A, B] for A in α, B in β) for α in nodes, β in nodes]
 end
 
+# ISx and IPM have their own methods (phiid_pointwise.jl), for every estimator.
 function phiid_redundancies(r::RedundancyFunction, est, lattice::PhiIDLattice, past::Tuple, future::Tuple)
     name = nameof(typeof(r))
-    why = if r isa Union{ISx,IPM}
-        "$name is not yet supported for ΦID"
-    elseif r isa IMin
+    why = if r isa IMin
         "IMin has no double-redundancy form: its redundancy Σₜ p(t) min_A I(T = t; A) " *
         "averages specific informations over the outcomes of a single target, and ΦID " *
         "needs a redundancy among source sets on both sides (past and future)"
@@ -787,12 +847,24 @@ function local_phiid_result(definition::PhiID, L::PhiIDLattice, R::AbstractMatri
     return LocalPhiIDResult(definition, L, phiid_local_atoms(L, R, rows; kwargs...))
 end
 
-# No per-sample ΦID yet. Later phases add more specific methods (e.g. for
-# `JointProbabilities{<:IntegratedInformationDecomposition{<:ISx}}`).
+# Per-sample ΦID atoms have more specific methods for IMMI (phiid_local_mmi.jl, every
+# family) and for ISx and IPM (phiid_pointwise.jl: JointProbabilities computes them, the
+# other families throw). This fallback catches the other redundancy functions: IMin and
+# user-defined ones without a `local_association` method.
 function local_association(est::PHIID_ESTIMATORS, x...; kwargs...)
-    r = nameof(typeof(est.definition.redundancy))
+    r = est.definition.redundancy
+    name = nameof(typeof(r))
+    why = if r isa IMin
+        "IMin has no ΦID double redundancy, average or per sample"
+    else
+        "Per-sample atoms need a `local_association` method for $name; " *
+        "`association(est, x...)` gives the average atoms if " *
+        "`LocalInformation.phiid_redundancies` has a method for it"
+    end
     throw(ArgumentError(
         "Per-sample (local) ΦID atoms are not implemented for a $(describe(est)) with " *
-        "redundancy function $r. Use `association(est, x...)` for the average atoms (a " *
-        "`PhiIDResult`)."))
+        "redundancy function $name. $why. Per-sample ΦID atoms are implemented for " *
+        "`IMMI()` (the default) and, with `JointProbabilities`, for `ISx()` and `IPM()`, " *
+        "e.g. `local_association(JointProbabilities(IntegratedInformationDecomposition(), " *
+        "CodifyVariables(UniqueElements())), x, y)`."))
 end

@@ -271,7 +271,9 @@ i^{sx}_\\cap(\\alpha \\to \\beta) = h_{sx}(\\alpha) + h_{sx}(\\beta) - h_{sx}(\\
 with ``h_{sx}(\\alpha) = -\\log P(a_1 \\cup \\ldots \\cup a_K)``,
 ``h_{sx}(\\beta) = -\\log P(b_1 \\cup \\ldots \\cup b_L)`` and
 ``h_{sx}(\\alpha \\times \\beta) = -\\log P\\big(\\bigcup_{k,l} (a_k \\cap b_l)\\big)``, the
-union over all ``K L`` pairs of the joint events of ``A_k \\cup B_l``. Union probabilities
+union over all ``K L`` pairs of the joint events of ``A_k \\cup B_l``. By distributivity that
+union is the event ``(a_1 \\cup \\ldots \\cup a_K) \\cap (b_1 \\cup \\ldots \\cup b_L)``, so this
+term is the ``h_{sx}(\\alpha \\cap \\beta)`` of Varley's ``I^{\\tau sx}``. Union probabilities
 are computed exactly by inclusion–exclusion over subsets of the events (the intersection
 of events is the event of the union of their variable sets), from integer counts.
 
@@ -326,6 +328,7 @@ information_dynamics(loc).transfer                  # per-sample transfer
 
 - Varley, T. F. (2023). Decomposing past and future: Integrated information decomposition
     based on shared probability mass exclusions. PLOS ONE, 18(3), e0282950.
+    doi:10.1371/journal.pone.0282950.
 - Makkeh, A., Gutknecht, A. J., & Wibral, M. (2021). Introducing a differentiable measure
     of pointwise shared information. Physical Review E, 103(3), 032149.
 - Finn, C., & Lizier, J. T. (2018). Pointwise partial information decomposition using the

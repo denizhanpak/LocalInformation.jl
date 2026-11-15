@@ -57,7 +57,7 @@ r(α→β; s) = h_sx(α) + h_sx(β) − h_sx(α×β), where
 - h_sx(β) = −log2 P(∪_j {B_j = b_j});
 - h_sx(α×β) = −log2 P(∪_{i,j} {A_i = a_i and B_j = b_j}).
 
-The joint term is the union over all k·l pairs, each pair being the source A_i ∪ B_j. The docstring writes this term as "h_sx(α∩β)" (`integrated_information_decomposition`, line 609), but the code builds the union over pairs.
+The joint term is the union over all k·l pairs, each pair being the source A_i ∪ B_j. The docstring writes this term as "h_sx(α∩β)" (`integrated_information_decomposition`, line 609). That is the same quantity: by distributivity, (∪_i {A_i = a_i}) ∩ (∪_j {B_j = b_j}) = ∪_{i,j} {A_i = a_i and B_j = b_j}, and the intersection form is how Varley (2023) defines it.
 
 **ipm** (`discrete/decompositions.py:296-316`):
 r(α→β; s) = min_i h(a_i) + min_j h(b_j) − min_{i,j} h(a_i, b_j).
@@ -208,7 +208,7 @@ Points to watch:
 2. **Units in syntropy.** syntropy's discrete and Gaussian ΦID use different units (bits vs nats). Its return types also differ: discrete returns `(None, avg)` for mmi and `(ptw, avg)` otherwise; Gaussian returns `avg` for mmi and `(ptw, avg)` for ipm.
 3. **Pointwise rows.** syntropy's pointwise values are per distinct joint state. For series cases, map each lagged sample to its row in `states`.
 4. **MMI on the copy case.** On `copy`, syntropy MMI gives xtx = yty = 1. It also gives rts = str = 1, sts = 2, and xts = yts = stx = sty = −1. This is correct MMI behaviour: red(x_t, y_t → x_{t+1}y_{t+1}) = min(1, 1) = 1 for independent sources. phyid's equations give the same.
-5. **Nothing looked wrong numerically** in either package for these cases. The only issues found are the docstring mismatch noted in §1 and the CPython set-ordering dependence in §1 and §2.
+5. **Nothing looked wrong numerically** in either package for these cases. The only issue found is the CPython set-ordering dependence in §1 and §2.
 
 ## Regeneration
 

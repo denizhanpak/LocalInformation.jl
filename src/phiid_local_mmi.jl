@@ -1,5 +1,5 @@
 # Per-sample ΦID atoms with the MMI double redundancy (phyid convention), for every
-# estimator family with local subset entropies, on the CPU or a GPU. (Phase 4.)
+# estimator family with local subset entropies, on the CPU or a GPU.
 #
 # For each pair (A, B) of nonempty variable sets, A of the past and B of the future, the
 # local mutual information i_t(A; B) = h_t(A) + h_t(B) - h_t(A ∪ B) comes from the local
@@ -133,7 +133,9 @@ information_dynamics(loc).transfer               # per-sample transfer mode
     <https://github.com/Imperial-MIND-lab/integrated-info-decomp>).
 - Mediano, P. A. M., Rosas, F. E., Luppi, A. I., et al. (2021). Towards an extended
     taxonomy of information dynamics via Integrated Information Decomposition.
-    arXiv:2109.13186; PNAS 122(39), e2423297122 (2025).
+    arXiv:2109.13186. Published as: Toward a unified taxonomy of information dynamics via
+    Integrated Information Decomposition. PNAS, 122(39), e2423297122 (2025).
+    doi:10.1073/pnas.2423297122.
 """
 function local_association(est::JointProbabilities{<:LocalMMIPhiID}, x...; kwargs...)
     return local_phiid_mmi_association(est, x...; kwargs...)

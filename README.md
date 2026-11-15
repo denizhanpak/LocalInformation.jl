@@ -20,6 +20,19 @@ est = GaussianDecomposition(OInformation())
 mean(ω) ≈ association(est, x, y, z)        # true
 ```
 
+## Features
+
+- Local mutual information, conditional mutual information and higher-order measures
+  (total correlation, dual total correlation, O- and S-information), for discrete, k-NN,
+  KSG and Gaussian estimators.
+- Local Shannon entropies (`local_entropy`).
+- Per-sample PID atoms with the pointwise redundancy functions `ISx` and `IPM`.
+- Integrated information decomposition (ΦID) of 2 or 3 variables, average and per-sample
+  atoms. It supports the MMI double redundancy for every estimator family, and `ISx` and
+  `IPM` for discrete data. Two-variable results also give the six information-dynamics
+  modes.
+- GPU backends through KernelAbstractions.jl.
+
 ## The invariant
 
 For every supported estimator `est`,
@@ -32,7 +45,9 @@ mean(local_entropy(est, o, x)) ≈ information(est, o, x)      # discrete
 
 to floating-point rounding (and to `Float32` rounding on a GPU). The test suite checks this
 for every method, in bases 2 and ℯ, with vector and multi-column `StateSpaceSet` inputs.
-Values are in the unit `est.definition.base` (bits by default).
+Values are in the unit `est.definition.base` (bits by default). The decompositions (PID
+and ΦID) return per-sample atoms, and the invariant holds for every atom `a`:
+`mean(atom(local_association(est, x...), a)) ≈ atom(association(est, x...), a)`.
 
 ## Supported estimators
 
@@ -143,6 +158,49 @@ estimator gives the per-sample values of one atom as a `Vector`.
 (from `test/fixtures/generate_syntropy_pid_fixtures.py`) holds syntropy's average and
 pointwise `isx`/`ipm` atoms, which the tests match to 1e-10.
 
+## Integrated information decomposition (ΦID)
+
+`IntegratedInformationDecomposition(redundancy = IMMI(); τ = 1, base = 2)` decomposes the
+time-delayed mutual information `I(X_t; X_{t+τ})` of 2 or 3 variables into the atoms of
+the ΦID product lattice of Mediano, Rosas et al.: 16 atoms (`:rtr` … `:sts`) for two
+variables and 324 for three. `association` returns the average atoms (a `PhiIDResult`) and
+`local_association` the atoms of every lagged sample `t = 1, …, N - τ` (a
+`LocalPhiIDResult`), whose means are the average atoms:
+
+```julia
+using Associations, LocalInformation, Statistics
+
+x = randn(10_001); y = randn(10_001)
+y[2:end] .+= 0.8 .* x[1:end-1]                   # x drives y
+
+est = GaussianDecomposition(IntegratedInformationDecomposition())
+res = association(est, x, y)                      # PhiIDResult: 16 atoms, in bits
+information_dynamics(res).transfer                # xty + ytx
+loc = local_association(est, x, y)                # LocalPhiIDResult: one row per sample
+mean(atom(loc, :xty)) ≈ atom(res, :xty)           # true
+```
+
+- **Double redundancies.** `IMMI()` is the default. Its average atoms work with
+  `JointProbabilities`, `GaussianDecomposition` and `EntropyDecomposition` with any
+  Shannon entropy estimator. Its per-sample atoms work with plug-in, `Kraskov`,
+  `KozachenkoLeonenko` and Gaussian entropies. `ISx()` (Varley's shared-exclusion double
+  redundancy) and `IPM()` work only with `JointProbabilities` and a `CodifyVariables`
+  discretization, for average and per-sample atoms.
+- **Per-sample MMI atoms** follow the convention of `phyid`: each local double redundancy
+  is the local mutual information of the pair of variable sets with the smallest mean.
+  They run on the CPU or a GPU.
+- **Encoding and lagging.** Discrete series are encoded once over their full length and
+  then lagged.
+- **Information dynamics.** `information_dynamics(res)` gives the six modes of Mediano et
+  al.: storage, copy, transfer, erasure, downward and upward causation.
+
+The [ΦID page](https://denizhanpak.github.io/LocalInformation.jl/dev/phiid/) of the
+documentation lists the estimators, the conventions and recipes such as transfer entropy,
+active information storage and Φ_WMS as sums of atoms. The tests compare the atoms with
+syntropy (average MMI, ISx and IPM atoms; pointwise ISx and IPM) and with phyid (average
+and local MMI atoms): `test/fixtures/syntropy_phiid_fixtures.json` and
+`test/fixtures/phyid_fixtures.json`, described in `test/fixtures/phiid_reference_notes.md`.
+
 ## Relation to Associations.jl
 
 LocalInformation.jl owns its functions (`local_association`, `local_entropy`) and dispatches
@@ -161,6 +219,8 @@ a vector of local subset entropies.
   the `k`-th nearest neighbour outside a Theiler window, dispatched on the backend.
 - `LocalInformation.resolve_precision`, `to_device`, `to_host`: backend and precision
   handling.
+- `LocalInformation.phiid_redundancies(r, est, lattice, past, future)`: the extension hook
+  for ΦID double redundancies (an `m × m` matrix, past nodes as rows).
 
 ## Installation
 

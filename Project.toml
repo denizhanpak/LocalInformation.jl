@@ -1,6 +1,6 @@
 name = "LocalInformation"
 uuid = "c5344c62-16b6-498c-b12b-6e723c9d4389"
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 Associations = "614afb3a-e278-4863-8805-9959372b9ec2"

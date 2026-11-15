@@ -23,7 +23,7 @@ export ISx, IPM, LocalPIDResult
     ISx()
 
 The pointwise shared-exclusion redundancy ``i^{sx}_\\cap`` of
-Makkeh, Gutknecht & Wibral (2021), for a [`PartialInformationDecomposition`](@ref).
+Makkeh, Gutknecht & Wibral (2021), for a `PartialInformationDecomposition`.
 
 ## Description
 
@@ -53,7 +53,7 @@ outcomes of the source sets ``\\bigcup_{j \\in J} A_j`` (exactly, in integer ari
 
 ## Usage
 
-Discrete data only: use [`JointProbabilities`](@ref) with `CodifyVariables`, e.g.
+Discrete data only: use `JointProbabilities` with `CodifyVariables`, e.g.
 
 ```julia
 est = JointProbabilities(PartialInformationDecomposition(ISx()), CodifyVariables(UniqueElements()))
@@ -62,6 +62,9 @@ local_association(est, s1, s2, t)    # LocalPIDResult (per-sample atoms)
 ```
 
 Atoms can be negative, also on average (e.g. the redundancy of XOR is ``\\log_2(2/3)``).
+
+`IntegratedInformationDecomposition(ISx())` uses its double-redundancy form, Varley's
+shared-exclusion ``i^{\\tau sx}_\\cap`` (see [`IntegratedInformationDecomposition`](@ref)).
 
 ## Reference
 
@@ -75,7 +78,7 @@ struct ISx <: RedundancyFunction end
     IPM()
 
 The pointwise redundancy ``i_\\pm`` of Finn & Lizier (2018), for a
-[`PartialInformationDecomposition`](@ref).
+`PartialInformationDecomposition`.
 
 ## Description
 
@@ -98,8 +101,11 @@ subtract the atoms; Möbius inversion is linear, so this gives the same atoms as
 
 ## Usage
 
-Discrete data only: use [`JointProbabilities`](@ref) with `CodifyVariables`, as for
+Discrete data only: use `JointProbabilities` with `CodifyVariables`, as for
 [`ISx`](@ref). `local_association` gives per-sample atoms.
+
+`IntegratedInformationDecomposition(IPM())` uses its double-redundancy form with past and
+future source sets (see [`IntegratedInformationDecomposition`](@ref)).
 
 ## Reference
 

@@ -366,6 +366,8 @@ end
     @test occursin("must be an `AbstractVector`", msg_of(() -> association(est, x, hcat(y, z))))
     # Redundancy functions without a ΦID double redundancy (ISx/IPM errors: test_phiid_pointwise.jl).
     @test occursin("no double-redundancy form", msg_of(() -> association(JointProbabilities(IIDec(IMin()), UE), x, y)))
+    m = msg_of(() -> local_association(JointProbabilities(IIDec(IMin()), UE), x, y))
+    @test occursin("IMin has no ΦID double redundancy", m) && !occursin("association(est", m)
     # Unsupported estimators.
     @test occursin("CodifyPoints", msg_of(() -> association(
         JointProbabilities(IIDec(), CodifyPoints(UniqueElementsEncoding(x))), x, y)))
