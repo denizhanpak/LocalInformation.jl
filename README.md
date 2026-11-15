@@ -1,5 +1,7 @@
 # LocalInformation.jl
 
+[![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://denizhanpak.github.io/LocalInformation.jl/dev/)
+
 Local (per-sample, pointwise) information measures, as a companion to
 [Associations.jl](https://github.com/kahaaga/Associations.jl).
 

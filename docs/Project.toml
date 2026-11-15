@@ -1,0 +1,11 @@
+[deps]
+Associations = "614afb3a-e278-4863-8805-9959372b9ec2"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+LocalInformation = "c5344c62-16b6-498c-b12b-6e723c9d4389"
+
+[sources]
+Associations = {url = "https://github.com/denizhanpak/Associations.jl", rev = "local-information-hooks"}
+LocalInformation = {path = ".."}
+
+[compat]
+Documenter = "1"
