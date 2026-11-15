@@ -23,7 +23,7 @@ export ISx, IPM, LocalPIDResult
     ISx()
 
 The pointwise shared-exclusion redundancy ``i^{sx}_\\cap`` of
-Makkeh, Gutknecht & Wibral (2021), for a [`PartialInformationDecomposition`](@ref).
+Makkeh, Gutknecht & Wibral (2021), for a `PartialInformationDecomposition`.
 
 ## Description
 
@@ -53,7 +53,7 @@ outcomes of the source sets ``\\bigcup_{j \\in J} A_j`` (exactly, in integer ari
 
 ## Usage
 
-Discrete data only: use [`JointProbabilities`](@ref) with `CodifyVariables`, e.g.
+Discrete data only: use `JointProbabilities` with `CodifyVariables`, e.g.
 
 ```julia
 est = JointProbabilities(PartialInformationDecomposition(ISx()), CodifyVariables(UniqueElements()))
@@ -62,6 +62,9 @@ local_association(est, s1, s2, t)    # LocalPIDResult (per-sample atoms)
 ```
 
 Atoms can be negative, also on average (e.g. the redundancy of XOR is ``\\log_2(2/3)``).
+
+`IntegratedInformationDecomposition(ISx())` uses its double-redundancy form, Varley's
+shared-exclusion ``i^{\\tau sx}_\\cap`` (see [`IntegratedInformationDecomposition`](@ref)).
 
 ## Reference
 
@@ -75,7 +78,7 @@ struct ISx <: RedundancyFunction end
     IPM()
 
 The pointwise redundancy ``i_\\pm`` of Finn & Lizier (2018), for a
-[`PartialInformationDecomposition`](@ref).
+`PartialInformationDecomposition`.
 
 ## Description
 
@@ -98,8 +101,11 @@ subtract the atoms; Möbius inversion is linear, so this gives the same atoms as
 
 ## Usage
 
-Discrete data only: use [`JointProbabilities`](@ref) with `CodifyVariables`, as for
+Discrete data only: use `JointProbabilities` with `CodifyVariables`, as for
 [`ISx`](@ref). `local_association` gives per-sample atoms.
+
+`IntegratedInformationDecomposition(IPM())` uses its double-redundancy form with past and
+future source sets (see [`IntegratedInformationDecomposition`](@ref)).
 
 ## Reference
 
@@ -111,31 +117,42 @@ struct IPM <: RedundancyFunction end
 const LocalRedundancy = Union{ISx,IPM}
 
 # ----------------------------------------------------------------------------------------
-# Plug-in counts of every source set, per distinct joint state.
+# Plug-in counts of every subset of the inputs, per distinct joint state.
 # ----------------------------------------------------------------------------------------
 """
-    LocalInformation.PIDCounts
+    LocalInformation.SubsetCounts
+    LocalInformation.SubsetCounts(codes::AbstractVector) → SubsetCounts
 
-Plug-in counts for a PID of `n` sources and a target, per distinct joint state of all the
-inputs (`K` states, `N` samples). Source set `M` is the bitmask of Associations'
-redundancy lattice (source `i` is bit `i - 1`).
+Plug-in counts of every nonempty subset of `k` inputs, per distinct joint state of all the
+inputs (`K` states, `N` samples), from the per-sample codes `codes[1], …, codes[k]` (any
+hashable values, e.g. integers or `StateSpaceSet` points). A subset is a bitmask `M` in
+`1:2ᵏ-1`, input `i` being bit `i - 1`.
 
-- `state[i]`: the joint state (`1:K`) of sample `i`; `weight[s]`: its number of samples.
-- `src[s, M]`: number of samples whose sources in `M` have the values of state `s`.
-- `srct[s, M]`: the same, jointly with the target.
-- `tgt[s]`: number of samples with the target value of state `s`.
+- `ninputs`: `k`; `N`: the number of samples.
+- `state[i]`: the joint state (`1:K`) of sample `i`, numbered in order of first
+    appearance; `weight[s]`: its number of samples.
+- `counts[s, M]`: the number of samples whose inputs in `M` have the values of state `s`
+    (`K × (2ᵏ - 1)`).
 
-Counts are stored as `Float64` (exact for counts below 2⁵³), so that inclusion–exclusion
-sums are matrix products.
+The joint labellings of the subsets are built depth first, each from its parent's, so at
+most `k` label vectors are alive. Counts are stored as `Float64` (exact for counts below
+2⁵³), so that inclusion–exclusion sums are matrix products.
+
+Layouts used:
+
+- PID of `n` sources and a target (`k = n + 1`, the target is input `n + 1`, bit `n`):
+    columns `1:2ⁿ-1` are the source sets (bitmasks of Associations' redundancy lattice),
+    column `2ⁿ` the target, and column `2ⁿ + M` source set `M` jointly with the target
+    (see `LocalInformation.pid_counts`).
+- ΦID of `n` variables (`k = 2n`): past variable `i` is bit `i - 1`, future variable `i`
+    bit `n + i - 1`.
 """
-struct PIDCounts
-    nsources::Int
+struct SubsetCounts
+    ninputs::Int
     N::Int
     state::Vector{Int}
     weight::Vector{Int}
-    src::Matrix{Float64}
-    srct::Matrix{Float64}
-    tgt::Vector{Float64}
+    counts::Matrix{Float64}
 end
 
 # Relabel the values of `v` as 1, 2, … in order of appearance. Returns labels and count.
@@ -171,14 +188,14 @@ function joint_labels(a::Vector{Int}, ka::Int, b::Vector{Int}, kb::Int)
     return out, k
 end
 
-function PIDCounts(codes::AbstractVector)
+function SubsetCounts(codes::AbstractVector)
     N = check_input_lengths(codes...)
-    n = length(codes) - 1
+    k = length(codes)
     lab = relabel.(codes)
     # Distinct joint states of all inputs, one representative sample each.
     state, K = lab[1]
-    for (l, k) in lab[2:end]
-        state, K = joint_labels(state, K, l, k)
+    for (l, kl) in lab[2:end]
+        state, K = joint_labels(state, K, l, kl)
     end
     weight = zeros(Int, K)
     rep = zeros(Int, K)
@@ -187,33 +204,43 @@ function PIDCounts(codes::AbstractVector)
         weight[s] += 1
         rep[s] == 0 && (rep[s] = i)
     end
-    nm = (1 << n) - 1
-    src = Matrix{Float64}(undef, K, nm)
-    srct = Matrix{Float64}(undef, K, nm)
-    tgt = Vector{Float64}(undef, K)
-    counts = Int[]
-    # Depth-first over the masks of the n + 1 inputs (bit n is the target), building each
-    # joint labelling from its parent's, so at most n + 1 label vectors are alive.
-    function visit(l, k, mask, topbit)
-        resize!(counts, k)
-        fill!(counts, 0)
+    counts = Matrix{Float64}(undef, K, (1 << k) - 1)
+    cnt = Int[]
+    # Depth-first over the masks of the k inputs, building each joint labelling from its
+    # parent's, so at most k label vectors are alive.
+    function visit(l, kl, mask, topbit)
+        resize!(cnt, kl)
+        fill!(cnt, 0)
         for x in l
-            counts[x] += 1
+            cnt[x] += 1
         end
-        col = mask & nm
-        dest = mask == col ? view(src, :, col) : col == 0 ? tgt : view(srct, :, col)
+        dest = view(counts, :, mask)
         for s in 1:K
-            dest[s] = counts[l[rep[s]]]
+            dest[s] = cnt[l[rep[s]]]
         end
-        for b in (topbit + 1):n
-            lb, kb = joint_labels(l, k, lab[b + 1]...)
+        for b in (topbit + 1):(k - 1)
+            lb, kb = joint_labels(l, kl, lab[b + 1]...)
             visit(lb, kb, mask | (1 << b), b)
         end
     end
-    for b in 0:n
+    for b in 0:(k - 1)
         visit(lab[b + 1]..., 1 << b, b)
     end
-    return PIDCounts(n, N, state, weight, src, srct, tgt)
+    return SubsetCounts(k, N, state, weight, counts)
+end
+
+"""
+    LocalInformation.pid_counts(sc::SubsetCounts) → (src, srct, tgt)
+
+Views into the counts of a PID of `n = sc.ninputs - 1` sources and a target (the last
+input): `src[s, M]` and `srct[s, M]` are the numbers of samples whose sources in the set
+`M` (`1:2ⁿ-1`) have the values of state `s`, without and with the target value of state
+`s`, and `tgt[s]` the number of samples with that target value.
+"""
+function pid_counts(sc::SubsetCounts)
+    nm = (1 << (sc.ninputs - 1)) - 1
+    c = sc.counts
+    return view(c, :, 1:nm), view(c, :, (nm + 2):(2nm + 1)), view(c, :, nm + 1)
 end
 
 # The per-sample codes of `x...` for a JointProbabilities PID estimator (as in discrete.jl).
@@ -253,19 +280,28 @@ struct PIDLatticeData
     zeta::BitMatrix
 end
 
+# Inclusion–exclusion for the union of the events Eₑ = "the inputs in `masks[e]` take their
+# values" (e = 1, …, k; the intersection of a set J of them is the event of the union of
+# their masks): P(E₁ ∪ … ∪ Eₖ) = Σ_{J ≠ ∅} (-1)^{|J|+1} P(x_{⋃_{e∈J} masks[e]}). Adds the
+# coefficient of each union mask M to `col[M]`.
+function add_union_coefficients!(col::AbstractVector, masks::AbstractVector{<:Integer})
+    k = length(masks)
+    for J in 1:((1 << k) - 1)
+        M = zero(eltype(masks))
+        for e in 1:k
+            (J >> (e - 1)) & 1 == 1 && (M |= masks[e])
+        end
+        col[M] += isodd(count_ones(J)) ? 1 : -1
+    end
+    return col
+end
+
 function PIDLatticeData(n::Int)
     L = redundancy_lattice(n)
     m = length(L.nodes)
     sx = zeros((1 << n) - 1, m)
     for (j, node) in enumerate(L.nodes)
-        k = length(node)
-        for J in 1:((1 << k) - 1)
-            M = UInt(0)
-            for e in 1:k
-                (J >> (e - 1)) & 1 == 1 && (M |= node[e])
-            end
-            sx[M, j] += isodd(count_ones(J)) ? 1 : -1
-        end
+        add_union_coefficients!(view(sx, :, j), node)
     end
     zeta = L.below[L.order, L.order]
     for a in 1:m
@@ -306,24 +342,26 @@ end
 # ----------------------------------------------------------------------------------------
 # Fill `R[:, k]` with the local redundancies of `lattice.nodes[nodes[k]]` for every state.
 # `c0[s] = log N - log n(t_s) = h(t)` of state s.
-function fill_redundancies!(R, ::ISx, pc::PIDCounts, data::PIDLatticeData, nodes)
+function fill_redundancies!(R, ::ISx, pc::SubsetCounts, data::PIDLatticeData, nodes)
     K = size(R, 1)
-    c0 = log(pc.N) .- log.(pc.tgt)
+    src, srct, tgt = pid_counts(pc)
+    c0 = log(pc.N) .- log.(tgt)
     # Union counts are sums over source sets with the inclusion–exclusion coefficients:
     # two matrix products (exact integers in Float64). Blocks bound the temporaries.
     bs = max(1, (1 << 22) ÷ max(K, 1))
     for b in Iterators.partition(eachindex(nodes), bs)
         C = data.sx[:, nodes[b]]
-        U = pc.src * C   # count of samples matching at least one a_j
-        UT = pc.srct * C # the same, with the target value t
+        U = src * C   # count of samples matching at least one a_j
+        UT = srct * C # the same, with the target value t
         @views @. R[:, b] = log(UT) - log(U) + c0
     end
     return R
 end
 
-function fill_redundancies!(R, ::IPM, pc::PIDCounts, data::PIDLatticeData, nodes)
-    c0 = log(pc.N) .- log.(pc.tgt)
-    lsrc, lsrct = log.(pc.src), log.(pc.srct)
+function fill_redundancies!(R, ::IPM, pc::SubsetCounts, data::PIDLatticeData, nodes)
+    src, srct, tgt = pid_counts(pc)
+    c0 = log(pc.N) .- log.(tgt)
+    lsrc, lsrct = log.(src), log.(srct)
     L = data.lattice
     for (k, j) in enumerate(nodes)
         node = L.nodes[j]
@@ -347,7 +385,7 @@ end
 # Average redundancies: the extension hook of Associations' PID.
 # ----------------------------------------------------------------------------------------
 function Associations.pid_redundancies(r::LocalRedundancy, est::JointProbabilities, lattice::RedundancyLattice, x...)
-    pc = PIDCounts(pid_codes(est, x...))
+    pc = SubsetCounts(pid_codes(est, x...))
     data = pid_lattice_data(lattice.nsources)
     data.lattice === lattice || data.lattice.nodes == lattice.nodes ||
         error("Unexpected redundancy lattice for $(lattice.nsources) sources.")
@@ -523,7 +561,7 @@ function local_association(
     data = pid_lattice_data(n)
     L = data.lattice
     m = length(L.nodes)
-    pc = PIDCounts(pid_codes(est, x...))
+    pc = SubsetCounts(pid_codes(est, x...))
     N, K = pc.N, length(pc.weight)
     if atoms === :all
         nodes = copy(L.order)

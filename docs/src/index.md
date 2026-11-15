@@ -18,6 +18,33 @@ est = GaussianDecomposition(OInformation())
 mean(ω) ≈ association(est, x, y, z)        # true
 ```
 
+## Features
+
+- Local mutual information, conditional mutual information and higher-order measures
+  (total correlation, dual total correlation, O- and S-information), for discrete, k-NN,
+  KSG and Gaussian estimators: [Supported estimators](@ref).
+- Local Shannon entropies with [`local_entropy`](@ref).
+- Per-sample PID atoms with the pointwise redundancy functions `ISx` and `IPM`:
+  [Partial information decomposition](@ref).
+- Integrated information decomposition (ΦID) of 2 or 3 variables, average and per-sample
+  atoms. It supports the MMI double redundancy for every estimator family, and `ISx` and
+  `IPM` for discrete data. Two-variable results also give the six information-dynamics
+  modes: [Integrated information decomposition (ΦID)](@ref).
+- GPU backends through KernelAbstractions.jl: [GPU](@ref).
+
+For example, the ΦID of two coupled Gaussian series:
+
+```julia
+x = randn(10_001); y = randn(10_001)
+y[2:end] .+= 0.8 .* x[1:end-1]                   # x drives y
+
+est = GaussianDecomposition(IntegratedInformationDecomposition())
+res = association(est, x, y)                      # PhiIDResult: 16 atoms, in bits
+information_dynamics(res).transfer                # xty + ytx
+loc = local_association(est, x, y)                # LocalPhiIDResult: one row per sample
+mean(atom(loc, :xty)) ≈ atom(res, :xty)           # true
+```
+
 ## The invariant
 
 For every supported estimator `est`,
@@ -30,7 +57,9 @@ mean(local_entropy(est, o, x)) ≈ information(est, o, x)      # discrete
 
 to floating-point rounding (and to `Float32` rounding on a GPU). The test suite checks this
 for every method, in bases 2 and ℯ, with vector and multi-column `StateSpaceSet` inputs.
-Values are in the unit `est.definition.base` (bits by default).
+Values are in the unit `est.definition.base` (bits by default). The decompositions (PID
+and ΦID) return per-sample atoms, and the invariant holds for every atom `a`:
+`mean(atom(local_association(est, x...), a)) ≈ atom(association(est, x...), a)`.
 
 ## Relation to Associations.jl
 

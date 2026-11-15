@@ -17,6 +17,7 @@ makedocs(;
         "Estimators" => "estimators.md",
         "GPU" => "gpu.md",
         "Partial information decomposition" => "pid.md",
+        "Integrated information decomposition" => "phiid.md",
         "API" => "api.md",
         "Internals" => "internals.md",
     ],

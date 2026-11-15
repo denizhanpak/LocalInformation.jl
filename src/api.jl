@@ -15,7 +15,10 @@ variable). For every supported estimator,
 mean(local_association(est, x...)) ≈ association(est, x...)
 ```
 
-up to floating-point rounding (and up to the `precision` used on a GPU).
+up to floating-point rounding (and up to the `precision` used on a GPU). The
+decompositions (PID and ΦID) return a result object of per-sample atoms instead of a
+`Vector`; for them the identity holds for every atom `a`:
+`mean(atom(local_association(est, x...), a)) ≈ atom(association(est, x...), a)`.
 
 ## Supported estimators
 
@@ -28,11 +31,18 @@ up to floating-point rounding (and up to the `precision` used on a GPU).
 | `FPVP` | `CMIShannon` | yes |
 | `GaussianDecomposition(def; copula)` | higher-order | yes |
 | `GaussianMI`, `GaussianCMI` | `MIShannon`, `CMIShannon` | yes |
+| `JointProbabilities(def, CodifyVariables(o))` | PID: `PartialInformationDecomposition(r)` with `r` = [`ISx`](@ref)`()` or [`IPM`](@ref)`()`, a [`LocalPIDResult`](@ref) (a `Vector` for a `PIDAtom`) | counting on the CPU, Möbius inversion on `backend` |
+| `JointProbabilities(def, CodifyVariables(o))` | ΦID: [`IntegratedInformationDecomposition`](@ref)`(r)` with `r` = `IMMI()`, `ISx()` or `IPM()`, a [`LocalPhiIDResult`](@ref) | counting on the CPU, Möbius inversion on `backend` |
+| `EntropyDecomposition(def, PlugIn(Shannon()), d)` | ΦID with `IMMI()` | counting on the CPU, Möbius inversion on `backend` |
+| `EntropyDecomposition(def, Kraskov(...))`, `EntropyDecomposition(def, KozachenkoLeonenko(...))`, `GaussianDecomposition(def; copula)` | ΦID with `IMMI()` | yes |
 
 "Higher-order" means `TotalCorrelation`, `DualTotalCorrelation`, `OInformation` and
 `SInformation`. Other estimators throw an `ArgumentError`. Bias-corrected entropy
 estimators (`MillerMadow`, `ChaoShen`, `Jackknife`, `Schuermann`, ...) are not supported,
-because their estimates are not means of per-sample terms.
+because their estimates are not means of per-sample terms. The PID and ΦID methods are
+documented below. Per-sample ΦID atoms with `IMMI()` follow the convention of `phyid`:
+each local double redundancy is the local mutual information of the pair of variable sets
+with the smallest mean.
 
 ## Keywords
 
@@ -42,6 +52,9 @@ because their estimates are not means of per-sample terms.
 - `precision`: the floating-point type to compute in and of the result. `nothing` (default)
     means `Float64` on the CPU and `Float32` on a GPU; `precision = Float64` is allowed on
     a GPU.
+
+The PID and ΦID methods also take `memory_limit` (bytes, default `2^31`), and the PID
+method takes `atoms`.
 
 ## Discretized inputs
 
@@ -152,7 +165,9 @@ Supported estimators: \
 `KSG1(MIShannon())`, `KSG2(MIShannon())`, `FPVP(CMIShannon())`, \
 `GaussianDecomposition(def)` (higher-order `def` only), `GaussianMI()` and `GaussianCMI()`, \
 where `def` is `MIShannon()`, `CMIShannon()` or a higher-order measure \
-(`TotalCorrelation`, `DualTotalCorrelation`, `OInformation`, `SInformation`). \
+(`TotalCorrelation`, `DualTotalCorrelation`, `OInformation`, `SInformation`); also \
+per-sample atoms of `PartialInformationDecomposition(ISx())` or `IPM()` with \
+`JointProbabilities`, and of `IntegratedInformationDecomposition` (see its docstring). \
 For example, `local_association(JointProbabilities(MIShannon(), \
 CodifyVariables(ValueBinning(RectangularBinning(4)))), x, y)`."""
 
