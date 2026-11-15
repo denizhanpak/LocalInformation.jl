@@ -47,4 +47,7 @@ include("higher_order.jl")
 # Phase 5 (local PID redundancy functions) goes here:
 include("pid.jl")
 
+# Integrated information decomposition (ΦID); uses the PID helpers above.
+include("phiid.jl")
+
 end # module
