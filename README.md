@@ -162,8 +162,22 @@ a vector of local subset entropies.
 
 ## Installation
 
-The package currently depends on an unreleased branch of Associations.jl, given by a
-`[sources]` entry in `Project.toml` (which needs Julia ≥ 1.11).
+LocalInformation.jl is not registered yet. It depends on extension hooks that are not in a
+released version of Associations.jl; until they are, `Project.toml` takes Associations from
+the `local-information-hooks` branch of
+[denizhanpak/Associations.jl](https://github.com/denizhanpak/Associations.jl) through a
+`[sources]` entry, which needs Julia ≥ 1.11.
+
+```julia
+using Pkg
+Pkg.add(url = "https://github.com/denizhanpak/LocalInformation.jl")
+```
+
+For GPU support, also install CUDA.jl (`Pkg.add("CUDA")`) and load it with `using CUDA`.
+
+## License
+
+MIT; see [LICENSE](LICENSE).
 
 ## Tests
 

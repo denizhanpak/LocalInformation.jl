@@ -19,7 +19,7 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 LocalInformationCUDAExt = "CUDA"
 
 [sources]
-Associations = {path = "../Associations.jl-localhooks"}
+Associations = {url = "https://github.com/denizhanpak/Associations.jl", rev = "local-information-hooks"}
 
 [compat]
 Associations = "4.8"
